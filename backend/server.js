@@ -442,6 +442,80 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
+// ============ ADMIN IMPORT ROUTE ============
+
+// Import nominations (admin only)
+app.post('/api/admin/import-nominations', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { nominations } = req.body;
+
+    if (!Array.isArray(nominations) || nominations.length === 0) {
+      return res.status(400).json({ error: 'Invalid nominations data. Expected array of nomination objects.' });
+    }
+
+    const insertStmt = db.prepare(`
+      INSERT INTO nominations (
+        name, year, career_position,
+        professional_achievements, professional_awards,
+        educational_achievements, merit_awards,
+        service_church_community, service_mbaphs,
+        nomination_summary,
+        nominator_name, nominator_email, nominator_phone,
+        created_by
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    let successCount = 0;
+    let errorCount = 0;
+    const errors = [];
+
+    const importMany = db.transaction((nominations) => {
+      for (const nom of nominations) {
+        try {
+          if (!nom.name) {
+            errorCount++;
+            errors.push({ nomination: nom, error: 'Missing name' });
+            continue;
+          }
+
+          insertStmt.run(
+            nom.name,
+            nom.year || null,
+            nom.career_position || null,
+            nom.professional_achievements || null,
+            nom.professional_awards || null,
+            nom.educational_achievements || null,
+            nom.merit_awards || null,
+            nom.service_church_community || null,
+            nom.service_mbaphs || null,
+            nom.nomination_summary || null,
+            nom.nominator_name || null,
+            nom.nominator_email || null,
+            nom.nominator_phone || null,
+            req.user.id
+          );
+          successCount++;
+        } catch (error) {
+          errorCount++;
+          errors.push({ nomination: nom.name, error: error.message });
+        }
+      }
+    });
+
+    importMany(nominations);
+
+    res.json({
+      message: 'Import completed',
+      successCount,
+      errorCount,
+      errors: errors.length > 0 ? errors : undefined
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Import failed', details: error.message });
+  }
+});
+
 // ============ STATS ROUTE ============
 
 app.get('/api/stats', authenticateToken, (req, res) => {
