@@ -6,3 +6,8 @@ dist/
 *.db
 .vscode/
 .idea/
+
+# Credentials
+*credentials*.txt
+*credentials*.json
+nominations-export.json
