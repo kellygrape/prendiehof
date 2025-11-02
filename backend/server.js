@@ -3,6 +3,7 @@ import cors from 'cors';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 import db from './database.js';
 
 dotenv.config();
@@ -461,6 +462,94 @@ app.get('/api/stats', authenticateToken, (req, res) => {
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Hall of Fame Nominations API' });
+});
+
+// ============ ONE-TIME SETUP ENDPOINT ============
+// Call this once to initialize database with admin and committee accounts
+app.post('/api/setup', async (req, res) => {
+  try {
+    const { setupKey, adminUsername, adminPassword } = req.body;
+
+    // Verify setup key (set this in Railway environment variables)
+    const SETUP_KEY = process.env.SETUP_KEY || 'change-this-secret-key';
+
+    if (setupKey !== SETUP_KEY) {
+      return res.status(403).json({ error: 'Invalid setup key' });
+    }
+
+    // Check if admin already exists
+    const existingAdmin = db.prepare('SELECT id FROM users WHERE role = ?').get('admin');
+    if (existingAdmin) {
+      return res.status(400).json({ error: 'Admin already exists. Setup already completed.' });
+    }
+
+    const credentials = [];
+
+    // Create admin
+    const adminHash = await bcrypt.hash(adminPassword, 10);
+    const adminResult = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run(adminUsername, adminHash, 'admin');
+
+    credentials.push({
+      name: 'Admin',
+      username: adminUsername,
+      password: adminPassword,
+      role: 'admin'
+    });
+
+    // Committee members list
+    const committeeMembers = [
+      { name: "Kelly Anne Pipe", username: "kpipe", email: "kellyanne.martin@gmail.com" },
+      { name: "Anne Marie Dolceamore", username: "adolceamore", email: "dolceamore@bonnerprendie.com" },
+      { name: "Lisa Stabilo", username: "lstabilo", email: "lisas901@comcast.net" },
+      { name: "Nikki Gingrich", username: "ngingrich", email: "nicole.gingrich15@gmail.com" },
+      { name: "Carol Dunleavy", username: "cdunleavy", email: "caroldunleavy81@comcast.net" },
+      { name: "Ashley Weyler", username: "aweyler", email: "arw723@gmail.com" },
+      { name: "Erin Brookes", username: "ebrookes", email: "erinkbrookes@gmail.com" },
+      { name: "Kelly Lynn Rogers", username: "krogers", email: "kellyrogers129@gmail.com" },
+      { name: "Marykate Murphy", username: "mmurphy", email: "marycatherine1112@gmail.com" },
+      { name: "Monique Shallow", username: "mshallow", email: "monique.shallow@bonnerprendie.com" }
+    ];
+
+    // Generate password helper
+    function generatePassword(length = 12) {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*';
+      let password = '';
+      const randomBytes = crypto.randomBytes(length);
+      for (let i = 0; i < length; i++) {
+        password += chars[randomBytes[i] % chars.length];
+      }
+      return password;
+    }
+
+    // Create committee accounts
+    for (const member of committeeMembers) {
+      const password = generatePassword(12);
+      const hash = await bcrypt.hash(password, 10);
+
+      try {
+        db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run(member.username, hash, 'committee');
+        credentials.push({
+          name: member.name,
+          username: member.username,
+          password: password,
+          email: member.email,
+          role: 'committee'
+        });
+      } catch (error) {
+        console.error(`Error creating ${member.username}:`, error.message);
+      }
+    }
+
+    res.json({
+      message: 'Setup completed successfully!',
+      credentials: credentials,
+      warning: 'Save these credentials securely and delete this endpoint after setup!'
+    });
+
+  } catch (error) {
+    console.error('Setup error:', error);
+    res.status(500).json({ error: 'Setup failed', details: error.message });
+  }
 });
 
 app.listen(PORT, () => {
