@@ -648,3 +648,335 @@
     gap: 1rem;
   }
 }
+
+/* Ballot Page */
+.ballot-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.ballot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 2rem;
+}
+
+.ballot-instructions {
+  color: var(--text-secondary);
+  margin-top: 0.5rem;
+  max-width: 600px;
+}
+
+.ballot-counter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: var(--primary-color);
+  color: white;
+  padding: 1.5rem 2rem;
+  border-radius: 0.75rem;
+  min-width: 120px;
+}
+
+.counter-number {
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.counter-label {
+  font-size: 0.875rem;
+  opacity: 0.9;
+  margin-top: 0.5rem;
+}
+
+.ballot-actions {
+  margin-bottom: 2rem;
+}
+
+.btn-large {
+  padding: 1rem 2rem;
+  font-size: 1.125rem;
+}
+
+.ballot-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+.ballot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ballot-item {
+  background-color: var(--card-bg);
+  border: 2px solid var(--border-color);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s;
+  gap: 1rem;
+}
+
+.ballot-item:hover {
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow);
+}
+
+.ballot-item.selected {
+  border-color: var(--primary-color);
+  background-color: rgba(37, 99, 235, 0.05);
+}
+
+.ballot-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+  cursor: pointer;
+}
+
+.ballot-checkbox {
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ballot-person-info h3 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.25rem;
+}
+
+.person-year {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin: 0.25rem 0;
+}
+
+.nomination-count {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-style: italic;
+  margin: 0.25rem 0 0 0;
+}
+
+.btn-view-nominations {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Nominations Panel (Side Panel) */
+.nominations-panel-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.nominations-panel {
+  background-color: var(--card-bg);
+  width: 600px;
+  max-width: 90vw;
+  height: 100vh;
+  overflow-y: auto;
+  box-shadow: -4px 0 6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 2rem;
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  background-color: var(--card-bg);
+  z-index: 10;
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.panel-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin: 0.5rem 0 0 0;
+}
+
+.panel-close {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.25rem;
+  transition: all 0.2s;
+}
+
+.panel-close:hover {
+  background-color: var(--border-color);
+  color: var(--text-color);
+}
+
+.panel-content {
+  padding: 2rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.nomination-detail {
+  background-color: var(--bg-color);
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.nomination-detail:last-child {
+  margin-bottom: 0;
+}
+
+.nomination-detail h3 {
+  margin-top: 0;
+  color: var(--primary-color);
+}
+
+.nom-section {
+  margin-bottom: 1.5rem;
+}
+
+.nom-section h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--text-color);
+}
+
+.nom-section p {
+  margin: 0;
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+.whitespace-pre-wrap {
+  white-space: pre-wrap;
+}
+
+/* Results Page Updates */
+.selection-bar-container {
+  margin: 1.5rem 0;
+}
+
+.selection-bar {
+  height: 32px;
+  background-color: var(--border-color);
+  border-radius: 1rem;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.selection-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary-color), var(--yes-color));
+  transition: width 0.3s ease;
+}
+
+.selection-count-large {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.result-card.top-eight {
+  border: 2px solid var(--yes-color);
+  position: relative;
+}
+
+.result-rank.top-rank {
+  background-color: var(--yes-color);
+  color: white;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+}
+
+.top-eight-badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background-color: var(--yes-color);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+.rank-badge {
+  background-color: var(--primary-color);
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+/* Responsive Updates */
+@media (max-width: 768px) {
+  .ballot-header {
+    flex-direction: column;
+  }
+
+  .ballot-counter {
+    width: 100%;
+  }
+
+  .ballot-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ballot-checkbox-label {
+    width: 100%;
+  }
+
+  .btn-view-nominations {
+    width: 100%;
+  }
+
+  .nominations-panel {
+    width: 100vw;
+  }
+
+  .panel-content {
+    padding: 1rem;
+  }
+}

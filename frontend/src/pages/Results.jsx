@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { votesAPI } from '../utils/api'
+import { resultsAPI } from '../utils/api'
 
 function Results({ user }) {
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
-  const [sortBy, setSortBy] = useState('votes') // votes, name
+  const [sortBy, setSortBy] = useState('selections') // selections, name
 
   useEffect(() => {
     loadResults()
@@ -12,7 +12,7 @@ function Results({ user }) {
 
   const loadResults = async () => {
     try {
-      const data = await votesAPI.getResults()
+      const data = await resultsAPI.get()
       setResults(data)
     } catch (err) {
       console.error('Failed to load results:', err)
@@ -22,18 +22,18 @@ function Results({ user }) {
   }
 
   const sortedResults = [...results].sort((a, b) => {
-    if (sortBy === 'votes') {
-      // Sort by yes votes descending
-      return b.yes_votes - a.yes_votes
+    if (sortBy === 'selections') {
+      // Sort by selection count descending
+      return b.selection_count - a.selection_count
     } else {
       // Sort by name alphabetically
       return a.name.localeCompare(b.name)
     }
   })
 
-  const getVotePercentage = (votes, total) => {
+  const getPercentage = (count, total) => {
     if (total === 0) return 0
-    return Math.round((votes / total) * 100)
+    return Math.round((count / total) * 100)
   }
 
   if (loading) {
@@ -47,7 +47,7 @@ function Results({ user }) {
         <div className="sort-controls">
           <label>Sort by:</label>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-            <option value="votes">Most Votes</option>
+            <option value="selections">Most Selections</option>
             <option value="name">Name (A-Z)</option>
           </select>
         </div>
@@ -55,64 +55,51 @@ function Results({ user }) {
 
       {results.length === 0 ? (
         <div className="empty-state">
-          <p>No results yet. Start voting on nominations!</p>
+          <p>No results yet. Committee members need to submit their ballots!</p>
         </div>
       ) : (
         <div className="results-list">
           {sortedResults.map((result, index) => {
-            const totalVotes = result.total_votes
-            const yesPercent = getVotePercentage(result.yes_votes, totalVotes)
-            const noPercent = getVotePercentage(result.no_votes, totalVotes)
-            const abstainPercent = getVotePercentage(result.abstain_votes, totalVotes)
-            const participationPercent = result.total_committee_members > 0
-              ? Math.round((totalVotes / result.total_committee_members) * 100)
-              : 0
+            const selectionPercent = getPercentage(result.selection_count, result.total_committee_members)
+            const isTopEight = index < 8
 
             return (
-              <div key={result.id} className="result-card">
+              <div key={`${result.name}|${result.year}`} className={`result-card ${isTopEight ? 'top-eight' : ''}`}>
                 <div className="result-header">
-                  <div className="result-rank">{index + 1}</div>
+                  <div className={`result-rank ${isTopEight ? 'top-rank' : ''}`}>{index + 1}</div>
                   <div className="result-info">
                     <h3>{result.name}</h3>
-                    {result.category && <span className="badge">{result.category}</span>}
+                    <p className="person-year">Class of {result.year}</p>
+                    {result.nomination_count > 1 && (
+                      <p className="nomination-count">{result.nomination_count} nominations</p>
+                    )}
                   </div>
                 </div>
 
                 <div className="result-stats">
                   <div className="stat-row">
-                    <span className="stat-label">Participation:</span>
+                    <span className="stat-label">Committee Selections:</span>
                     <span className="stat-value">
-                      {totalVotes} of {result.total_committee_members} members ({participationPercent}%)
+                      {result.selection_count} of {result.total_committee_members} members ({selectionPercent}%)
                     </span>
                   </div>
                 </div>
 
-                <div className="vote-breakdown">
-                  <div className="vote-bar">
-                    <div className="bar-segment yes" style={{ width: `${yesPercent}%` }}></div>
-                    <div className="bar-segment no" style={{ width: `${noPercent}%` }}></div>
-                    <div className="bar-segment abstain" style={{ width: `${abstainPercent}%` }}></div>
+                <div className="selection-bar-container">
+                  <div className="selection-bar">
+                    <div
+                      className="selection-bar-fill"
+                      style={{ width: `${selectionPercent}%` }}
+                    ></div>
                   </div>
-
-                  <div className="vote-details">
-                    <div className="vote-detail yes">
-                      <span className="count">{result.yes_votes}</span>
-                      <span className="label">Yes ({yesPercent}%)</span>
-                    </div>
-                    <div className="vote-detail no">
-                      <span className="count">{result.no_votes}</span>
-                      <span className="label">No ({noPercent}%)</span>
-                    </div>
-                    <div className="vote-detail abstain">
-                      <span className="count">{result.abstain_votes}</span>
-                      <span className="label">Abstain ({abstainPercent}%)</span>
-                    </div>
+                  <div className="selection-count-large">
+                    {result.selection_count} {result.selection_count === 1 ? 'selection' : 'selections'}
                   </div>
                 </div>
 
-                <a href={`/nominations/${result.id}`} className="btn-secondary">
-                  View Details
-                </a>
+                {isTopEight && (
+                  <div className="top-eight-badge">Top 8</div>
+                )}
               </div>
             )
           })}

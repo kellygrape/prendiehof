@@ -271,74 +271,135 @@ app.delete('/api/nominations/:id', authenticateToken, requireAdmin, (req, res) =
   }
 });
 
-// ============ VOTING ROUTES ============
+// ============ PEOPLE ROUTES (Grouped Nominations) ============
 
-// Submit or update vote
-app.post('/api/votes/:nominationId', authenticateToken, (req, res) => {
+// Get unique people (grouped nominations)
+app.get('/api/people', authenticateToken, (req, res) => {
   try {
-    const { vote, comment } = req.body;
-    const nominationId = req.params.nominationId;
+    const people = db.prepare(`
+      SELECT
+        name,
+        year,
+        COUNT(*) as nomination_count,
+        GROUP_CONCAT(id) as nomination_ids
+      FROM nominations
+      GROUP BY name, year
+      ORDER BY name
+    `).all();
 
-    if (!['yes', 'no', 'abstain'].includes(vote)) {
-      return res.status(400).json({ error: 'Invalid vote. Must be yes, no, or abstain' });
-    }
-
-    // Check if nomination exists
-    const nomination = db.prepare('SELECT id FROM nominations WHERE id = ?').get(nominationId);
-    if (!nomination) {
-      return res.status(404).json({ error: 'Nomination not found' });
-    }
-
-    // Insert or replace vote
-    const stmt = db.prepare(`
-      INSERT INTO votes (nomination_id, user_id, vote, comment, updated_at)
-      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(nomination_id, user_id)
-      DO UPDATE SET vote = ?, comment = ?, updated_at = CURRENT_TIMESTAMP
-    `);
-
-    stmt.run(nominationId, req.user.id, vote, comment || null, vote, comment || null);
-
-    res.json({ message: 'Vote recorded successfully' });
+    res.json(people);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to record vote' });
+    res.status(500).json({ error: 'Failed to fetch people' });
   }
 });
 
-// Get user's votes
-app.get('/api/votes/my-votes', authenticateToken, (req, res) => {
+// Get all nominations for a specific person
+app.get('/api/people/:name/:year/nominations', authenticateToken, (req, res) => {
   try {
-    const votes = db.prepare(`
-      SELECT v.*, n.name as nomination_name
-      FROM votes v
-      JOIN nominations n ON v.nomination_id = n.id
-      WHERE v.user_id = ?
-      ORDER BY v.updated_at DESC
+    const { name, year } = req.params;
+
+    const nominations = db.prepare(`
+      SELECT *
+      FROM nominations
+      WHERE name = ? AND year = ?
+      ORDER BY created_at DESC
+    `).all(name, year);
+
+    if (nominations.length === 0) {
+      return res.status(404).json({ error: 'No nominations found for this person' });
+    }
+
+    res.json(nominations);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch nominations' });
+  }
+});
+
+// ============ BALLOT ROUTES ============
+
+// Get current user's ballot selections
+app.get('/api/ballot/my-selections', authenticateToken, (req, res) => {
+  try {
+    const selections = db.prepare(`
+      SELECT person_name, person_year, created_at, updated_at
+      FROM ballot_selections
+      WHERE user_id = ?
+      ORDER BY created_at DESC
     `).all(req.user.id);
 
-    res.json(votes);
+    res.json(selections);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch votes' });
+    res.status(500).json({ error: 'Failed to fetch ballot selections' });
   }
 });
 
-// Get voting results (admin or for finished voting)
-app.get('/api/votes/results', authenticateToken, (req, res) => {
+// Save/update ballot selections
+app.post('/api/ballot', authenticateToken, (req, res) => {
+  try {
+    const { selections } = req.body; // Array of { person_name, person_year }
+
+    if (!Array.isArray(selections)) {
+      return res.status(400).json({ error: 'Selections must be an array' });
+    }
+
+    if (selections.length > 8) {
+      return res.status(400).json({ error: 'Cannot select more than 8 people' });
+    }
+
+    // Validate that all people exist
+    for (const selection of selections) {
+      const exists = db.prepare(`
+        SELECT COUNT(*) as count
+        FROM nominations
+        WHERE name = ? AND year = ?
+      `).get(selection.person_name, selection.person_year);
+
+      if (exists.count === 0) {
+        return res.status(400).json({
+          error: `Person not found: ${selection.person_name} (${selection.person_year})`
+        });
+      }
+    }
+
+    // Use transaction to update selections
+    const updateBallot = db.transaction((userId, selections) => {
+      // Delete all existing selections for this user
+      db.prepare('DELETE FROM ballot_selections WHERE user_id = ?').run(userId);
+
+      // Insert new selections
+      const insertStmt = db.prepare(`
+        INSERT INTO ballot_selections (user_id, person_name, person_year)
+        VALUES (?, ?, ?)
+      `);
+
+      for (const selection of selections) {
+        insertStmt.run(userId, selection.person_name, selection.person_year);
+      }
+    });
+
+    updateBallot(req.user.id, selections);
+
+    res.json({ message: 'Ballot saved successfully', count: selections.length });
+  } catch (error) {
+    console.error('Ballot save error:', error);
+    res.status(500).json({ error: 'Failed to save ballot' });
+  }
+});
+
+// Get voting results
+app.get('/api/results', authenticateToken, (req, res) => {
   try {
     const results = db.prepare(`
       SELECT
-        n.id,
         n.name,
-        n.category,
-        COUNT(DISTINCT v.id) as total_votes,
-        COUNT(DISTINCT CASE WHEN v.vote = 'yes' THEN v.id END) as yes_votes,
-        COUNT(DISTINCT CASE WHEN v.vote = 'no' THEN v.id END) as no_votes,
-        COUNT(DISTINCT CASE WHEN v.vote = 'abstain' THEN v.id END) as abstain_votes,
+        n.year,
+        COUNT(DISTINCT n.id) as nomination_count,
+        COUNT(DISTINCT bs.id) as selection_count,
         (SELECT COUNT(*) FROM users WHERE role = 'committee') as total_committee_members
       FROM nominations n
-      LEFT JOIN votes v ON n.id = v.nomination_id
-      GROUP BY n.id
-      ORDER BY yes_votes DESC, n.name
+      LEFT JOIN ballot_selections bs ON n.name = bs.person_name AND n.year = bs.person_year
+      GROUP BY n.name, n.year
+      ORDER BY selection_count DESC, n.name
     `).all();
 
     res.json(results);
@@ -385,9 +446,10 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, (req, res) => {
 app.get('/api/stats', authenticateToken, (req, res) => {
   try {
     const stats = {
+      totalPeople: db.prepare('SELECT COUNT(DISTINCT name || year) as count FROM nominations').get().count,
       totalNominations: db.prepare('SELECT COUNT(*) as count FROM nominations').get().count,
       totalCommitteeMembers: db.prepare('SELECT COUNT(*) as count FROM users WHERE role = ?').get('committee').count,
-      myVotesCount: db.prepare('SELECT COUNT(*) as count FROM votes WHERE user_id = ?').get(req.user.id).count
+      mySelectionsCount: db.prepare('SELECT COUNT(*) as count FROM ballot_selections WHERE user_id = ?').get(req.user.id).count
     };
 
     res.json(stats);

@@ -39,16 +39,35 @@ function initializeDatabase() {
     )
   `);
 
-  // Nominations table
+  // Nominations table with detailed fields
   db.exec(`
     CREATE TABLE IF NOT EXISTS nominations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      category TEXT,
-      description TEXT,
-      achievements TEXT,
       year INTEGER,
-      additional_info TEXT,
+
+      -- Career information
+      career_position TEXT,
+
+      -- Achievement fields
+      professional_achievements TEXT,
+      professional_awards TEXT,
+      educational_achievements TEXT,
+      merit_awards TEXT,
+
+      -- Service fields
+      service_church_community TEXT,
+      service_mbaphs TEXT,
+
+      -- Summary
+      nomination_summary TEXT,
+
+      -- Nominator information
+      nominator_name TEXT,
+      nominator_email TEXT,
+      nominator_phone TEXT,
+
+      -- System fields
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       created_by INTEGER,
       FOREIGN KEY (created_by) REFERENCES users(id)

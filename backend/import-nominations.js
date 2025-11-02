@@ -48,37 +48,41 @@ async function importNominations(csvFilePath) {
   return new Promise((resolve, reject) => {
     createReadStream(csvFilePath)
       .pipe(parse({
-        columns: true,
+        columns: (header) => {
+          // Handle duplicate column names by renaming them
+          const seen = {};
+          return header.map((col) => {
+            // Normalize spacing
+            const normalized = col.replace(/\s+/g, ' ').trim();
+            if (seen[normalized]) {
+              seen[normalized]++;
+              return `${normalized} ${seen[normalized]}`;
+            } else {
+              seen[normalized] = 1;
+              return normalized;
+            }
+          });
+        },
         skip_empty_lines: true,
         trim: true
       }))
       .on('data', (row) => {
         rowCount++;
 
-        // Combine all achievement fields
-        const achievements = [
-          row['Professional Achievements'],
-          row['Professional Awards and Honors'] && `Awards: ${row['Professional Awards and Honors']}`,
-          row['Educational Achievements'] && `Education: ${row['Educational Achievements']}`,
-          row['Merit Awards'] && `Merit: ${row['Merit Awards']}`
-        ].filter(Boolean).join('\n\n');
-
-        // Combine service fields
-        const additionalInfo = [
-          row['Career / Position / Title'] && `Position: ${row['Career / Position / Title']}`,
-          row['Service to Church and Community'] && `Service to Church/Community: ${row['Service to Church and Community']}`,
-          row['Service to MBAPHS'] && `Service to MBAPHS: ${row['Service to MBAPHS']}`,
-          row['Your Name'] && `Nominated by: ${row['Your Name']}`,
-          row['Email'] && `Contact: ${row['Email']}${row['Phone'] ? ', ' + row['Phone'] : ''}`
-        ].filter(Boolean).join('\n\n');
-
         const nomination = {
           name: row['Name of the Nominee'],
           year: row['Graduation Year'] || null,
-          category: 'Hall of Fame', // You can adjust this or extract from data
-          description: row['Nomination Summary / Narrative'] || '',
-          achievements: achievements || null,
-          additional_info: additionalInfo || null,
+          career_position: row['Career / Position / Title'] || null,
+          professional_achievements: row['Professional Achievements'] || null,
+          professional_awards: row['Professional Awards and Honors'] || null,
+          educational_achievements: row['Educational Achievements'] || null,
+          merit_awards: row['Merit Awards'] || null,
+          service_church_community: row['Service to Church and Community'] || null,
+          service_mbaphs: row['Service to MBAPHS'] || null,
+          nomination_summary: row['Nomination Summary / Narrative'] || null,
+          nominator_name: row['Your Name'] || null,
+          nominator_email: row['Email'] || null,
+          nominator_phone: row['Phone'] || null,
           created_by: adminId
         };
 
@@ -90,8 +94,16 @@ async function importNominations(csvFilePath) {
 
         // Insert nominations into database
         const insertStmt = db.prepare(`
-          INSERT INTO nominations (name, year, category, description, achievements, additional_info, created_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO nominations (
+            name, year, career_position,
+            professional_achievements, professional_awards,
+            educational_achievements, merit_awards,
+            service_church_community, service_mbaphs,
+            nomination_summary,
+            nominator_name, nominator_email, nominator_phone,
+            created_by
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         let successCount = 0;
@@ -109,10 +121,17 @@ async function importNominations(csvFilePath) {
               insertStmt.run(
                 nom.name,
                 nom.year,
-                nom.category,
-                nom.description,
-                nom.achievements,
-                nom.additional_info,
+                nom.career_position,
+                nom.professional_achievements,
+                nom.professional_awards,
+                nom.educational_achievements,
+                nom.merit_awards,
+                nom.service_church_community,
+                nom.service_mbaphs,
+                nom.nomination_summary,
+                nom.nominator_name,
+                nom.nominator_email,
+                nom.nominator_phone,
                 nom.created_by
               );
               successCount++;

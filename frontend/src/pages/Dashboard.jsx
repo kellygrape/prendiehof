@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { statsAPI, nominationsAPI } from '../utils/api'
+import { statsAPI, resultsAPI } from '../utils/api'
 
 function Dashboard({ user }) {
   const [stats, setStats] = useState(null)
-  const [recentNominations, setRecentNominations] = useState([])
+  const [topPeople, setTopPeople] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -12,12 +12,12 @@ function Dashboard({ user }) {
 
   const loadDashboard = async () => {
     try {
-      const [statsData, nominationsData] = await Promise.all([
+      const [statsData, resultsData] = await Promise.all([
         statsAPI.get(),
-        nominationsAPI.getAll()
+        resultsAPI.get()
       ])
       setStats(statsData)
-      setRecentNominations(nominationsData.slice(0, 5))
+      setTopPeople(resultsData.slice(0, 5))
     } catch (err) {
       console.error('Failed to load dashboard:', err)
     } finally {
@@ -29,41 +29,53 @@ function Dashboard({ user }) {
     return <div className="loading">Loading dashboard...</div>
   }
 
+  const hasSubmittedBallot = stats?.mySelectionsCount > 0
+
   return (
     <div className="dashboard">
       <h1>Welcome, {user.username}!</h1>
 
       <div className="stats-grid">
         <div className="stat-card">
+          <h3>Nominees</h3>
+          <p className="stat-number">{stats?.totalPeople || 0}</p>
+        </div>
+        <div className="stat-card">
           <h3>Total Nominations</h3>
           <p className="stat-number">{stats?.totalNominations || 0}</p>
         </div>
         <div className="stat-card">
-          <h3>Committee Members</h3>
-          <p className="stat-number">{stats?.totalCommitteeMembers || 0}</p>
-        </div>
-        <div className="stat-card">
-          <h3>Your Votes</h3>
-          <p className="stat-number">{stats?.myVotesCount || 0}</p>
+          <h3>Your Ballot</h3>
+          <p className="stat-number">{stats?.mySelectionsCount || 0} / 8</p>
         </div>
       </div>
 
+      {!hasSubmittedBallot && (
+        <div className="info-message" style={{ marginBottom: '2rem' }}>
+          You haven't submitted your ballot yet. Select up to 8 people to induct into the Hall of Fame!
+        </div>
+      )}
+
       <div className="recent-section">
-        <h2>Recent Nominations</h2>
-        {recentNominations.length === 0 ? (
-          <p>No nominations yet.</p>
+        <h2>Current Top 5</h2>
+        {topPeople.length === 0 ? (
+          <p>No votes yet.</p>
         ) : (
           <div className="nominations-list">
-            {recentNominations.map((nomination) => (
-              <div key={nomination.id} className="nomination-card">
-                <h3>
-                  <a href={`/nominations/${nomination.id}`}>{nomination.name}</a>
-                </h3>
-                {nomination.category && <p className="category">{nomination.category}</p>}
-                <div className="vote-summary">
-                  <span className="vote-count yes">{nomination.yes_votes} Yes</span>
-                  <span className="vote-count no">{nomination.no_votes} No</span>
-                  <span className="vote-count abstain">{nomination.abstain_votes} Abstain</span>
+            {topPeople.map((person, index) => (
+              <div key={`${person.name}|${person.year}`} className="nomination-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div className="rank-badge">{index + 1}</div>
+                  <div>
+                    <h3>{person.name}</h3>
+                    <p className="category">Class of {person.year}</p>
+                    <div className="vote-summary">
+                      <span className="vote-count yes">{person.selection_count} selections</span>
+                      {person.nomination_count > 1 && (
+                        <span className="vote-count">{person.nomination_count} nominations</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
@@ -73,8 +85,10 @@ function Dashboard({ user }) {
 
       <div className="quick-actions">
         <h2>Quick Actions</h2>
-        <a href="/nominations" className="btn-primary">View All Nominations</a>
-        <a href="/results" className="btn-secondary">View Results</a>
+        <a href="/ballot" className="btn-primary">
+          {hasSubmittedBallot ? 'Update My Ballot' : 'Submit My Ballot'}
+        </a>
+        <a href="/results" className="btn-secondary">View Full Results</a>
         {user.role === 'admin' && (
           <a href="/admin" className="btn-secondary">Admin Panel</a>
         )}

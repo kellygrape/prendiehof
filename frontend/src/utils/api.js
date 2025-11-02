@@ -114,16 +114,26 @@ export const nominationsAPI = {
   }),
 };
 
-// Votes API
-export const votesAPI = {
-  submit: (nominationId, vote, comment) => fetchAPI(`/votes/${nominationId}`, {
+// People API (grouped nominations)
+export const peopleAPI = {
+  getAll: () => fetchAPI('/people'),
+
+  getNominations: (name, year) => fetchAPI(`/people/${encodeURIComponent(name)}/${encodeURIComponent(year)}/nominations`),
+};
+
+// Ballot API
+export const ballotAPI = {
+  getMySelections: () => fetchAPI('/ballot/my-selections'),
+
+  saveSelections: (selections) => fetchAPI('/ballot', {
     method: 'POST',
-    body: JSON.stringify({ vote, comment }),
+    body: JSON.stringify({ selections }),
   }),
+};
 
-  getMyVotes: () => fetchAPI('/votes/my-votes'),
-
-  getResults: () => fetchAPI('/votes/results'),
+// Results API
+export const resultsAPI = {
+  get: () => fetchAPI('/results'),
 };
 
 // Users API

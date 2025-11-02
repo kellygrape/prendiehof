@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { ThemeProvider } from '@mui/material/styles'
+import CssBaseline from '@mui/material/CssBaseline'
 import { authAPI } from './utils/api'
+import theme from './theme'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
-import Nominations from './pages/Nominations'
-import NominationDetail from './pages/NominationDetail'
+import Ballot from './pages/Ballot'
 import AdminPanel from './pages/AdminPanel'
 import Results from './pages/Results'
 import './App.css'
@@ -34,15 +36,17 @@ function App() {
   }
 
   return (
-    <Router>
-      <div className="app">
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Router>
+        <div className="app">
         {user && (
           <nav className="navbar">
             <div className="nav-content">
               <h1>Hall of Fame Nominations</h1>
               <div className="nav-links">
                 <a href="/dashboard">Dashboard</a>
-                <a href="/nominations">Nominations</a>
+                <a href="/ballot">My Ballot</a>
                 <a href="/results">Results</a>
                 {user.role === 'admin' && <a href="/admin">Admin</a>}
                 <div className="user-info">
@@ -69,15 +73,9 @@ function App() {
               }
             />
             <Route
-              path="/nominations"
+              path="/ballot"
               element={
-                user ? <Nominations user={user} /> : <Navigate to="/login" />
-              }
-            />
-            <Route
-              path="/nominations/:id"
-              element={
-                user ? <NominationDetail user={user} /> : <Navigate to="/login" />
+                user ? <Ballot user={user} /> : <Navigate to="/login" />
               }
             />
             <Route
@@ -97,6 +95,7 @@ function App() {
         </div>
       </div>
     </Router>
+    </ThemeProvider>
   )
 }
 
