@@ -13,14 +13,13 @@ const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this';
 
 // Middleware
-// Configure CORS to allow frontend in production
 const corsOptions = {
   origin: process.env.FRONTEND_URL || '*',
   credentials: true,
   optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '10mb' })); // Allow larger payloads for nomination imports
+app.use(express.json({ limit: '10mb' }));
 
 // Auth middleware
 function authenticateToken(req, res, next) {
@@ -50,7 +49,7 @@ function requireAdmin(req, res, next) {
 
 // ============ AUTH ROUTES ============
 
-// Register user (admin only, or initial setup)
+// Register
 app.post('/api/auth/register', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { username, password, role } = req.body;
@@ -61,15 +60,17 @@ app.post('/api/auth/register', authenticateToken, requireAdmin, async (req, res)
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const stmt = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)');
-    const result = stmt.run(username, hashedPassword, role);
+    const result = await db.query(
+      'INSERT INTO users (username, password, role) VALUES ($1, $2, $3) RETURNING id',
+      [username, hashedPassword, role]
+    );
 
     res.status(201).json({
       message: 'User created successfully',
-      userId: result.lastInsertRowid
+      userId: result.rows[0].id
     });
   } catch (error) {
-    if (error.message.includes('UNIQUE constraint failed')) {
+    if (error.message.includes('duplicate key') || error.code === '23505') {
       res.status(400).json({ error: 'Username already exists' });
     } else {
       res.status(500).json({ error: 'Failed to create user' });
@@ -82,7 +83,8 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    const result = await db.query('SELECT * FROM users WHERE username = $1', [username]);
+    const user = result.rows[0];
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -100,217 +102,48 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    res.json({
-      token,
-      user: {
-        id: user.id,
-        username: user.username,
-        role: user.role
-      }
-    });
+    res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
   } catch (error) {
     res.status(500).json({ error: 'Login failed' });
   }
 });
 
-// Initialize admin account (only works if no admin exists)
-app.post('/api/auth/init-admin', async (req, res) => {
+// ============ PEOPLE ROUTES ============
+
+// Get all people (grouped nominations)
+app.get('/api/people', authenticateToken, async (req, res) => {
   try {
-    const existingAdmin = db.prepare('SELECT * FROM users WHERE role = ?').get('admin');
-
-    if (existingAdmin) {
-      return res.status(400).json({ error: 'Admin already exists' });
-    }
-
-    const { username, password } = req.body;
-
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const stmt = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)');
-    const result = stmt.run(username, hashedPassword, 'admin');
-
-    res.status(201).json({
-      message: 'Admin account created successfully',
-      userId: result.lastInsertRowid
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to create admin account' });
-  }
-});
-
-// ============ NOMINATION ROUTES ============
-
-// Get all nominations
-app.get('/api/nominations', authenticateToken, (req, res) => {
-  try {
-    const nominations = db.prepare(`
-      SELECT n.*,
-             COUNT(DISTINCT CASE WHEN v.vote = 'yes' THEN v.id END) as yes_votes,
-             COUNT(DISTINCT CASE WHEN v.vote = 'no' THEN v.id END) as no_votes,
-             COUNT(DISTINCT CASE WHEN v.vote = 'abstain' THEN v.id END) as abstain_votes,
-             COUNT(DISTINCT v.id) as total_votes
-      FROM nominations n
-      LEFT JOIN votes v ON n.id = v.nomination_id
-      GROUP BY n.id
-      ORDER BY n.created_at DESC
-    `).all();
-
-    res.json(nominations);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch nominations' });
-  }
-});
-
-// Get single nomination with user's vote
-app.get('/api/nominations/:id', authenticateToken, (req, res) => {
-  try {
-    const nomination = db.prepare(`
-      SELECT n.*,
-             COUNT(DISTINCT CASE WHEN v.vote = 'yes' THEN v.id END) as yes_votes,
-             COUNT(DISTINCT CASE WHEN v.vote = 'no' THEN v.id END) as no_votes,
-             COUNT(DISTINCT CASE WHEN v.vote = 'abstain' THEN v.id END) as abstain_votes
-      FROM nominations n
-      LEFT JOIN votes v ON n.id = v.nomination_id
-      WHERE n.id = ?
-      GROUP BY n.id
-    `).get(req.params.id);
-
-    if (!nomination) {
-      return res.status(404).json({ error: 'Nomination not found' });
-    }
-
-    // Get user's vote if exists
-    const userVote = db.prepare('SELECT * FROM votes WHERE nomination_id = ? AND user_id = ?')
-      .get(req.params.id, req.user.id);
-
-    res.json({ ...nomination, userVote });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch nomination' });
-  }
-});
-
-// Create nomination (admin only)
-app.post('/api/nominations', authenticateToken, requireAdmin, (req, res) => {
-  try {
-    const { name, category, description, achievements, year, additional_info } = req.body;
-
-    if (!name) {
-      return res.status(400).json({ error: 'Name is required' });
-    }
-
-    const stmt = db.prepare(`
-      INSERT INTO nominations (name, category, description, achievements, year, additional_info, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const result = stmt.run(
-      name,
-      category || null,
-      description || null,
-      achievements || null,
-      year || null,
-      additional_info || null,
-      req.user.id
-    );
-
-    res.status(201).json({
-      message: 'Nomination created successfully',
-      nominationId: result.lastInsertRowid
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to create nomination' });
-  }
-});
-
-// Update nomination (admin only)
-app.put('/api/nominations/:id', authenticateToken, requireAdmin, (req, res) => {
-  try {
-    const { name, category, description, achievements, year, additional_info } = req.body;
-
-    const stmt = db.prepare(`
-      UPDATE nominations
-      SET name = ?, category = ?, description = ?, achievements = ?, year = ?, additional_info = ?
-      WHERE id = ?
-    `);
-
-    const result = stmt.run(
-      name,
-      category || null,
-      description || null,
-      achievements || null,
-      year || null,
-      additional_info || null,
-      req.params.id
-    );
-
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'Nomination not found' });
-    }
-
-    res.json({ message: 'Nomination updated successfully' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update nomination' });
-  }
-});
-
-// Delete nomination (admin only)
-app.delete('/api/nominations/:id', authenticateToken, requireAdmin, (req, res) => {
-  try {
-    const stmt = db.prepare('DELETE FROM nominations WHERE id = ?');
-    const result = stmt.run(req.params.id);
-
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'Nomination not found' });
-    }
-
-    res.json({ message: 'Nomination deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to delete nomination' });
-  }
-});
-
-// ============ PEOPLE ROUTES (Grouped Nominations) ============
-
-// Get unique people (grouped nominations)
-app.get('/api/people', authenticateToken, (req, res) => {
-  try {
-    const people = db.prepare(`
-      SELECT
-        name,
-        year,
-        COUNT(*) as nomination_count,
-        GROUP_CONCAT(id) as nomination_ids
+    const result = await db.query(`
+      SELECT name, year, COUNT(*) as nomination_count,
+             array_agg(id) as nomination_ids
       FROM nominations
       GROUP BY name, year
       ORDER BY name
-    `).all();
+    `);
 
-    res.json(people);
+    res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch people' });
   }
 });
 
-// Get all nominations for a specific person
-app.get('/api/people/:name/:year/nominations', authenticateToken, (req, res) => {
+// Get nominations for specific person
+app.get('/api/people/:name/:year/nominations', authenticateToken, async (req, res) => {
   try {
     const { name, year } = req.params;
 
-    const nominations = db.prepare(`
+    const result = await db.query(`
       SELECT *
       FROM nominations
-      WHERE name = ? AND year = ?
+      WHERE name = $1 AND year = $2
       ORDER BY created_at DESC
-    `).all(name, year);
+    `, [name, year]);
 
-    if (nominations.length === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'No nominations found for this person' });
     }
 
-    res.json(nominations);
+    res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch nominations' });
   }
@@ -319,91 +152,77 @@ app.get('/api/people/:name/:year/nominations', authenticateToken, (req, res) => 
 // ============ BALLOT ROUTES ============
 
 // Get current user's ballot selections
-app.get('/api/ballot/my-selections', authenticateToken, (req, res) => {
+app.get('/api/ballot/my-selections', authenticateToken, async (req, res) => {
   try {
-    const selections = db.prepare(`
+    const result = await db.query(`
       SELECT person_name, person_year, created_at, updated_at
       FROM ballot_selections
-      WHERE user_id = ?
+      WHERE user_id = $1
       ORDER BY created_at DESC
-    `).all(req.user.id);
+    `, [req.user.id]);
 
-    res.json(selections);
+    res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch ballot selections' });
   }
 });
 
 // Save/update ballot selections
-app.post('/api/ballot', authenticateToken, (req, res) => {
+app.post('/api/ballot', authenticateToken, async (req, res) => {
+  const client = await db.connect();
+
   try {
-    const { selections } = req.body; // Array of { person_name, person_year }
+    const { selections } = req.body;
 
     if (!Array.isArray(selections)) {
       return res.status(400).json({ error: 'Selections must be an array' });
     }
 
     if (selections.length > 8) {
-      return res.status(400).json({ error: 'Cannot select more than 8 people' });
+      return res.status(400).json({ error: 'Maximum 8 selections allowed' });
     }
 
-    // Validate that all people exist
+    await client.query('BEGIN');
+
+    // Delete existing selections
+    await client.query('DELETE FROM ballot_selections WHERE user_id = $1', [req.user.id]);
+
+    // Insert new selections
     for (const selection of selections) {
-      const exists = db.prepare(`
-        SELECT COUNT(*) as count
-        FROM nominations
-        WHERE name = ? AND year = ?
-      `).get(selection.person_name, selection.person_year);
-
-      if (exists.count === 0) {
-        return res.status(400).json({
-          error: `Person not found: ${selection.person_name} (${selection.person_year})`
-        });
-      }
+      await client.query(
+        `INSERT INTO ballot_selections (user_id, person_name, person_year)
+         VALUES ($1, $2, $3)`,
+        [req.user.id, selection.person_name, selection.person_year]
+      );
     }
 
-    // Use transaction to update selections
-    const updateBallot = db.transaction((userId, selections) => {
-      // Delete all existing selections for this user
-      db.prepare('DELETE FROM ballot_selections WHERE user_id = ?').run(userId);
-
-      // Insert new selections
-      const insertStmt = db.prepare(`
-        INSERT INTO ballot_selections (user_id, person_name, person_year)
-        VALUES (?, ?, ?)
-      `);
-
-      for (const selection of selections) {
-        insertStmt.run(userId, selection.person_name, selection.person_year);
-      }
-    });
-
-    updateBallot(req.user.id, selections);
+    await client.query('COMMIT');
 
     res.json({ message: 'Ballot saved successfully', count: selections.length });
   } catch (error) {
-    console.error('Ballot save error:', error);
+    await client.query('ROLLBACK');
     res.status(500).json({ error: 'Failed to save ballot' });
+  } finally {
+    client.release();
   }
 });
 
-// Get voting results
-app.get('/api/results', authenticateToken, (req, res) => {
+// ============ RESULTS ROUTE ============
+
+app.get('/api/results', authenticateToken, async (req, res) => {
   try {
-    const results = db.prepare(`
-      SELECT
-        n.name,
-        n.year,
-        COUNT(DISTINCT n.id) as nomination_count,
-        COUNT(DISTINCT bs.id) as selection_count,
-        (SELECT COUNT(*) FROM users WHERE role = 'committee') as total_committee_members
+    const result = await db.query(`
+      SELECT n.name, n.year,
+             COUNT(DISTINCT n.id) as nomination_count,
+             COUNT(DISTINCT bs.id) as selection_count,
+             (SELECT COUNT(*) FROM users WHERE role = 'committee') as total_committee_members
       FROM nominations n
-      LEFT JOIN ballot_selections bs ON n.name = bs.person_name AND n.year = bs.person_year
+      LEFT JOIN ballot_selections bs ON n.name = bs.person_name AND n.year::text = bs.person_year
       GROUP BY n.name, n.year
       ORDER BY selection_count DESC, n.name
-    `).all();
+    `);
 
-    res.json(results);
+    res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch results' });
   }
@@ -411,28 +230,26 @@ app.get('/api/results', authenticateToken, (req, res) => {
 
 // ============ USER MANAGEMENT ROUTES ============
 
-// Get all users (admin only)
-app.get('/api/users', authenticateToken, requireAdmin, (req, res) => {
+app.get('/api/users', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const users = db.prepare('SELECT id, username, role, created_at FROM users ORDER BY created_at DESC').all();
-    res.json(users);
+    const result = await db.query(
+      'SELECT id, username, role, created_at FROM users ORDER BY created_at DESC'
+    );
+    res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
 
-// Delete user (admin only)
-app.delete('/api/users/:id', authenticateToken, requireAdmin, (req, res) => {
+app.delete('/api/users/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    // Prevent deleting yourself
     if (parseInt(req.params.id) === req.user.id) {
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
 
-    const stmt = db.prepare('DELETE FROM users WHERE id = ?');
-    const result = stmt.run(req.params.id);
+    const result = await db.query('DELETE FROM users WHERE id = $1', [req.params.id]);
 
-    if (result.changes === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
 
@@ -442,44 +259,65 @@ app.delete('/api/users/:id', authenticateToken, requireAdmin, (req, res) => {
   }
 });
 
+// ============ STATS ROUTE ============
+
+app.get('/api/stats', authenticateToken, async (req, res) => {
+  try {
+    const [people, nominations, committee, mySelections] = await Promise.all([
+      db.query('SELECT COUNT(DISTINCT (name || year)) as count FROM nominations'),
+      db.query('SELECT COUNT(*) as count FROM nominations'),
+      db.query("SELECT COUNT(*) as count FROM users WHERE role = 'committee'"),
+      db.query('SELECT COUNT(*) as count FROM ballot_selections WHERE user_id = $1', [req.user.id])
+    ]);
+
+    res.json({
+      totalPeople: parseInt(people.rows[0].count),
+      totalNominations: parseInt(nominations.rows[0].count),
+      totalCommitteeMembers: parseInt(committee.rows[0].count),
+      mySelectionsCount: parseInt(mySelections.rows[0].count)
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
 // ============ ADMIN IMPORT ROUTE ============
 
-// Import nominations (admin only)
-app.post('/api/admin/import-nominations', authenticateToken, requireAdmin, (req, res) => {
+app.post('/api/admin/import-nominations', authenticateToken, requireAdmin, async (req, res) => {
+  const client = await db.connect();
+
   try {
     const { nominations } = req.body;
 
     if (!Array.isArray(nominations) || nominations.length === 0) {
-      return res.status(400).json({ error: 'Invalid nominations data. Expected array of nomination objects.' });
+      return res.status(400).json({ error: 'Invalid nominations data' });
     }
 
-    const insertStmt = db.prepare(`
-      INSERT INTO nominations (
-        name, year, career_position,
-        professional_achievements, professional_awards,
-        educational_achievements, merit_awards,
-        service_church_community, service_mbaphs,
-        nomination_summary,
-        nominator_name, nominator_email, nominator_phone,
-        created_by
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    await client.query('BEGIN');
 
     let successCount = 0;
     let errorCount = 0;
     const errors = [];
 
-    const importMany = db.transaction((nominations) => {
-      for (const nom of nominations) {
-        try {
-          if (!nom.name) {
-            errorCount++;
-            errors.push({ nomination: nom, error: 'Missing name' });
-            continue;
-          }
+    for (const nom of nominations) {
+      try {
+        if (!nom.name) {
+          errorCount++;
+          errors.push({ nomination: nom, error: 'Missing name' });
+          continue;
+        }
 
-          insertStmt.run(
+        await client.query(
+          `INSERT INTO nominations (
+            name, year, career_position,
+            professional_achievements, professional_awards,
+            educational_achievements, merit_awards,
+            service_church_community, service_mbaphs,
+            nomination_summary,
+            nominator_name, nominator_email, nominator_phone,
+            created_by
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+          [
             nom.name,
             nom.year || null,
             nom.career_position || null,
@@ -494,16 +332,16 @@ app.post('/api/admin/import-nominations', authenticateToken, requireAdmin, (req,
             nom.nominator_email || null,
             nom.nominator_phone || null,
             req.user.id
-          );
-          successCount++;
-        } catch (error) {
-          errorCount++;
-          errors.push({ nomination: nom.name, error: error.message });
-        }
+          ]
+        );
+        successCount++;
+      } catch (error) {
+        errorCount++;
+        errors.push({ nomination: nom.name, error: error.message });
       }
-    });
+    }
 
-    importMany(nominations);
+    await client.query('COMMIT');
 
     res.json({
       message: 'Import completed',
@@ -512,39 +350,21 @@ app.post('/api/admin/import-nominations', authenticateToken, requireAdmin, (req,
       errors: errors.length > 0 ? errors : undefined
     });
   } catch (error) {
+    await client.query('ROLLBACK');
     res.status(500).json({ error: 'Import failed', details: error.message });
+  } finally {
+    client.release();
   }
-});
-
-// ============ STATS ROUTE ============
-
-app.get('/api/stats', authenticateToken, (req, res) => {
-  try {
-    const stats = {
-      totalPeople: db.prepare('SELECT COUNT(DISTINCT name || year) as count FROM nominations').get().count,
-      totalNominations: db.prepare('SELECT COUNT(*) as count FROM nominations').get().count,
-      totalCommitteeMembers: db.prepare('SELECT COUNT(*) as count FROM users WHERE role = ?').get('committee').count,
-      mySelectionsCount: db.prepare('SELECT COUNT(*) as count FROM ballot_selections WHERE user_id = ?').get(req.user.id).count
-    };
-
-    res.json(stats);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch stats' });
-  }
-});
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Hall of Fame Nominations API' });
 });
 
 // ============ ONE-TIME SETUP ENDPOINT ============
-// Call this once to initialize database with admin and committee accounts
+
 app.post('/api/setup', async (req, res) => {
+  const client = await db.connect();
+
   try {
     const { setupKey, adminUsername, adminPassword } = req.body;
 
-    // Verify setup key (set this in Railway environment variables)
     const SETUP_KEY = process.env.SETUP_KEY || 'change-this-secret-key';
 
     if (setupKey !== SETUP_KEY) {
@@ -552,16 +372,21 @@ app.post('/api/setup', async (req, res) => {
     }
 
     // Check if admin already exists
-    const existingAdmin = db.prepare('SELECT id FROM users WHERE role = ?').get('admin');
-    if (existingAdmin) {
+    const adminCheck = await client.query("SELECT id FROM users WHERE role = 'admin'");
+    if (adminCheck.rows.length > 0) {
       return res.status(400).json({ error: 'Admin already exists. Setup already completed.' });
     }
+
+    await client.query('BEGIN');
 
     const credentials = [];
 
     // Create admin
     const adminHash = await bcrypt.hash(adminPassword, 10);
-    const adminResult = db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run(adminUsername, adminHash, 'admin');
+    await client.query(
+      'INSERT INTO users (username, password, role) VALUES ($1, $2, $3)',
+      [adminUsername, adminHash, 'admin']
+    );
 
     credentials.push({
       name: 'Admin',
@@ -570,7 +395,7 @@ app.post('/api/setup', async (req, res) => {
       role: 'admin'
     });
 
-    // Committee members list
+    // Committee members
     const committeeMembers = [
       { name: "Kelly Anne Pipe", username: "kpipe", email: "kellyanne.martin@gmail.com" },
       { name: "Anne Marie Dolceamore", username: "adolceamore", email: "dolceamore@bonnerprendie.com" },
@@ -584,7 +409,6 @@ app.post('/api/setup', async (req, res) => {
       { name: "Monique Shallow", username: "mshallow", email: "monique.shallow@bonnerprendie.com" }
     ];
 
-    // Generate password helper
     function generatePassword(length = 12) {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*';
       let password = '';
@@ -595,13 +419,15 @@ app.post('/api/setup', async (req, res) => {
       return password;
     }
 
-    // Create committee accounts
     for (const member of committeeMembers) {
       const password = generatePassword(12);
       const hash = await bcrypt.hash(password, 10);
 
       try {
-        db.prepare('INSERT INTO users (username, password, role) VALUES (?, ?, ?)').run(member.username, hash, 'committee');
+        await client.query(
+          'INSERT INTO users (username, password, role) VALUES ($1, $2, $3)',
+          [member.username, hash, 'committee']
+        );
         credentials.push({
           name: member.name,
           username: member.username,
@@ -614,16 +440,26 @@ app.post('/api/setup', async (req, res) => {
       }
     }
 
+    await client.query('COMMIT');
+
     res.json({
       message: 'Setup completed successfully!',
       credentials: credentials,
-      warning: 'Save these credentials securely and delete this endpoint after setup!'
+      warning: 'Save these credentials securely!'
     });
 
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Setup error:', error);
     res.status(500).json({ error: 'Setup failed', details: error.message });
+  } finally {
+    client.release();
   }
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'Hall of Fame Nominations API' });
 });
 
 app.listen(PORT, () => {

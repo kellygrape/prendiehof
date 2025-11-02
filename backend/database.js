@@ -1,98 +1,85 @@
-import Database from 'better-sqlite3';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
+import pkg from 'pg';
+const { Pool } = pkg;
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Use DATABASE_URL from Railway in production, or local Postgres in development
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://localhost/nominations_dev',
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
 
-// Use persistent volume path in production (Railway), local path in development
-const dbPath = process.env.NODE_ENV === 'production' && existsSync('/app/data')
-  ? '/app/data/nominations.db'
-  : join(__dirname, 'nominations.db');
+console.log('Connected to PostgreSQL database');
 
-// Ensure data directory exists if using production path
-if (process.env.NODE_ENV === 'production' && !existsSync('/app/data')) {
+// Initialize database schema
+async function initializeDatabase() {
+  const client = await pool.connect();
+
   try {
-    mkdirSync('/app/data', { recursive: true });
-  } catch (err) {
-    console.error('Could not create data directory:', err);
+    // Users table (committee members)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('admin', 'committee')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Nominations table with detailed fields
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS nominations (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        year INTEGER,
+
+        career_position TEXT,
+
+        professional_achievements TEXT,
+        professional_awards TEXT,
+        educational_achievements TEXT,
+        merit_awards TEXT,
+
+        service_church_community TEXT,
+        service_mbaphs TEXT,
+
+        nomination_summary TEXT,
+
+        nominator_name TEXT,
+        nominator_email TEXT,
+        nominator_phone TEXT,
+
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_by INTEGER REFERENCES users(id)
+      )
+    `);
+
+    // Ballot selections table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ballot_selections (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        person_name TEXT NOT NULL,
+        person_year TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, person_name, person_year)
+      )
+    `);
+
+    // Create indexes
+    await client.query('CREATE INDEX IF NOT EXISTS idx_ballot_selections_user ON ballot_selections(user_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_nominations_name_year ON nominations(name, year)');
+
+    console.log('Database initialized successfully');
+  } catch (error) {
+    console.error('Error initializing database:', error);
+    throw error;
+  } finally {
+    client.release();
   }
 }
 
-console.log('Using database at:', dbPath);
-const db = new Database(dbPath);
+// Initialize on startup
+initializeDatabase().catch(console.error);
 
-// Enable foreign keys
-db.pragma('foreign_keys = ON');
-
-// Initialize database schema
-function initializeDatabase() {
-  // Users table (committee members)
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('admin', 'committee')),
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // Nominations table with detailed fields
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS nominations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      year INTEGER,
-
-      -- Career information
-      career_position TEXT,
-
-      -- Achievement fields
-      professional_achievements TEXT,
-      professional_awards TEXT,
-      educational_achievements TEXT,
-      merit_awards TEXT,
-
-      -- Service fields
-      service_church_community TEXT,
-      service_mbaphs TEXT,
-
-      -- Summary
-      nomination_summary TEXT,
-
-      -- Nominator information
-      nominator_name TEXT,
-      nominator_email TEXT,
-      nominator_phone TEXT,
-
-      -- System fields
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      created_by INTEGER,
-      FOREIGN KEY (created_by) REFERENCES users(id)
-    )
-  `);
-
-  // Votes table
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS votes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      nomination_id INTEGER NOT NULL,
-      user_id INTEGER NOT NULL,
-      vote TEXT NOT NULL CHECK(vote IN ('yes', 'no', 'abstain')),
-      comment TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (nomination_id) REFERENCES nominations(id) ON DELETE CASCADE,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      UNIQUE(nomination_id, user_id)
-    )
-  `);
-
-  console.log('Database initialized successfully');
-}
-
-initializeDatabase();
-
-export default db;
+export default pool;
