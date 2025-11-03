@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Ballot from "./pages/Ballot";
 import AdminPanel from "./pages/AdminPanel";
 import Results from "./pages/Results";
+import ChangePassword from "./pages/ChangePassword";
 import "./App.css";
 import ResponsiveAppBar from "./components/AppBar";
 import type { User } from "./types";
@@ -66,6 +67,10 @@ function App() {
               <Route
                 path="/results"
                 element={user ? <Results user={user} /> : <Navigate to="/login" />}
+              />
+              <Route
+                path="/change-password"
+                element={user ? <ChangePassword /> : <Navigate to="/login" />}
               />
               <Route path="/" element={<Navigate to="/dashboard" />} />
             </Routes>

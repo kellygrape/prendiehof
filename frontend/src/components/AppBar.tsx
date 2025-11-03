@@ -16,6 +16,7 @@ import Chip from "@mui/material/Chip";
 import MenuIcon from "@mui/icons-material/Menu";
 import LogoutIcon from "@mui/icons-material/Logout";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
+import LockIcon from "@mui/icons-material/Lock";
 import type { User } from "../types";
 
 const DRAWER_WIDTH = 240;
@@ -105,6 +106,17 @@ function ResponsiveAppBar({ user, logout }: AppBarProps) {
         <Button
           variant="outlined"
           fullWidth
+          startIcon={<LockIcon />}
+          component={Link}
+          to="/change-password"
+          size="small"
+          sx={{ mb: 1 }}
+        >
+          Change Password
+        </Button>
+        <Button
+          variant="outlined"
+          fullWidth
           startIcon={<LogoutIcon />}
           onClick={logout}
           size="small"
@@ -169,7 +181,7 @@ function ResponsiveAppBar({ user, logout }: AppBarProps) {
           </Box>
 
           {/* Desktop user info and logout */}
-          <Box sx={{ display: { xs: "none", sm: "flex" }, gap: 2, alignItems: "center" }}>
+          <Box sx={{ display: { xs: "none", sm: "flex" }, gap: 1, alignItems: "center" }}>
             <Chip
               label={`${user.username} (${user.role})`}
               size="small"
@@ -180,6 +192,19 @@ function ResponsiveAppBar({ user, logout }: AppBarProps) {
               }}
               icon={user.role === "admin" ? <AdminPanelSettingsIcon /> : undefined}
             />
+            <Button
+              color="inherit"
+              startIcon={<LockIcon />}
+              component={Link}
+              to="/change-password"
+              sx={{
+                "&:hover": {
+                  backgroundColor: "rgba(255, 255, 255, 0.1)",
+                },
+              }}
+            >
+              Change Password
+            </Button>
             <Button
               color="inherit"
               startIcon={<LogoutIcon />}
