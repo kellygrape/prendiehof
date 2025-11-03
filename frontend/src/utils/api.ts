@@ -80,13 +80,6 @@ export const authAPI = {
     return data;
   },
 
-  initAdmin: async (username: string, password: string): Promise<AuthResponse> => {
-    return fetchAPI<AuthResponse>("/auth/init-admin", {
-      method: "POST",
-      body: JSON.stringify({ username, password }),
-    });
-  },
-
   register: async (
     username: string,
     password: string,

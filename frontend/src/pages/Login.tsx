@@ -11,7 +11,6 @@ function Login({ onLogin }: LoginProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showInitAdmin, setShowInitAdmin] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -19,28 +18,6 @@ function Login({ onLogin }: LoginProps) {
     setLoading(true);
 
     try {
-      const data = await authAPI.login(username, password);
-      onLogin(data.user);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "An error occurred";
-      setError(message);
-      // If login fails, might need to init admin
-      if (message.includes("Invalid credentials")) {
-        setShowInitAdmin(true);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleInitAdmin = async (e: FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-
-    try {
-      await authAPI.initAdmin(username, password);
-      // Now login with the new admin credentials
       const data = await authAPI.login(username, password);
       onLogin(data.user);
     } catch (err) {
@@ -59,7 +36,7 @@ function Login({ onLogin }: LoginProps) {
 
         {error && <div className="error-message">{error}</div>}
 
-        <form onSubmit={showInitAdmin ? handleInitAdmin : handleSubmit}>
+        <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="username">Username</label>
             <input
@@ -84,13 +61,9 @@ function Login({ onLogin }: LoginProps) {
           </div>
 
           <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? "Loading..." : showInitAdmin ? "Create Admin Account" : "Login"}
+            {loading ? "Loading..." : "Login"}
           </button>
         </form>
-
-        {showInitAdmin && (
-          <div className="info-message">No admin account exists. Create one to get started.</div>
-        )}
       </div>
     </div>
   );
