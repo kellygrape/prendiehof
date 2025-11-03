@@ -1,35 +1,37 @@
-import { useState, useEffect } from 'react'
-import { statsAPI, resultsAPI } from '../utils/api'
+import { useState, useEffect } from "react";
+import { statsAPI, resultsAPI } from "../utils/api";
+import type { User, Stats, ResultPerson } from "../types";
 
-function Dashboard({ user }) {
-  const [stats, setStats] = useState(null)
-  const [topPeople, setTopPeople] = useState([])
-  const [loading, setLoading] = useState(true)
+interface DashboardProps {
+  user: User;
+}
+
+function Dashboard({ user }: DashboardProps) {
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [topPeople, setTopPeople] = useState<ResultPerson[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadDashboard()
-  }, [])
+    loadDashboard();
+  }, []);
 
   const loadDashboard = async () => {
     try {
-      const [statsData, resultsData] = await Promise.all([
-        statsAPI.get(),
-        resultsAPI.get()
-      ])
-      setStats(statsData)
-      setTopPeople(resultsData.slice(0, 5))
+      const [statsData, resultsData] = await Promise.all([statsAPI.get(), resultsAPI.get()]);
+      setStats(statsData);
+      setTopPeople(resultsData.slice(0, 5));
     } catch (err) {
-      console.error('Failed to load dashboard:', err)
+      console.error("Failed to load dashboard:", err);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   if (loading) {
-    return <div className="loading">Loading dashboard...</div>
+    return <div className="loading">Loading dashboard...</div>;
   }
 
-  const hasSubmittedBallot = stats?.mySelectionsCount > 0
+  const hasSubmittedBallot = (stats?.mySelections || 0) > 0;
 
   return (
     <div className="dashboard">
@@ -46,13 +48,14 @@ function Dashboard({ user }) {
         </div>
         <div className="stat-card">
           <h3>Your Ballot</h3>
-          <p className="stat-number">{stats?.mySelectionsCount || 0} / 8</p>
+          <p className="stat-number">{stats?.mySelections || 0} / 8</p>
         </div>
       </div>
 
       {!hasSubmittedBallot && (
-        <div className="info-message" style={{ marginBottom: '2rem' }}>
-          You haven't submitted your ballot yet. Select up to 8 people to induct into the Hall of Fame!
+        <div className="info-message" style={{ marginBottom: "2rem" }}>
+          You haven't submitted your ballot yet. Select up to 8 people to induct into the Hall of
+          Fame!
         </div>
       )}
 
@@ -64,16 +67,13 @@ function Dashboard({ user }) {
           <div className="nominations-list">
             {topPeople.map((person, index) => (
               <div key={`${person.name}|${person.year}`} className="nomination-card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
                   <div className="rank-badge">{index + 1}</div>
                   <div>
                     <h3>{person.name}</h3>
                     <p className="category">Class of {person.year}</p>
                     <div className="vote-summary">
                       <span className="vote-count yes">{person.selection_count} selections</span>
-                      {person.nomination_count > 1 && (
-                        <span className="vote-count">{person.nomination_count} nominations</span>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -86,15 +86,19 @@ function Dashboard({ user }) {
       <div className="quick-actions">
         <h2>Quick Actions</h2>
         <a href="/ballot" className="btn-primary">
-          {hasSubmittedBallot ? 'Update My Ballot' : 'Submit My Ballot'}
+          {hasSubmittedBallot ? "Update My Ballot" : "Submit My Ballot"}
         </a>
-        <a href="/results" className="btn-secondary">View Full Results</a>
-        {user.role === 'admin' && (
-          <a href="/admin" className="btn-secondary">Admin Panel</a>
+        <a href="/results" className="btn-secondary">
+          View Full Results
+        </a>
+        {user.role === "admin" && (
+          <a href="/admin" className="btn-secondary">
+            Admin Panel
+          </a>
         )}
       </div>
     </div>
-  )
+  );
 }
 
-export default Dashboard
+export default Dashboard;

@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import pkg from 'pg';
 const { Pool } = pkg;
 
@@ -8,6 +11,7 @@ const pool = new Pool({
 });
 
 console.log('Connected to PostgreSQL database');
+console.log('Using connection string:', process.env.DATABASE_URL ? 'DATABASE_URL from env' : 'default localhost');
 
 // Initialize database schema
 async function initializeDatabase() {

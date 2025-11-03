@@ -1,12 +1,12 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import dotenv from 'dotenv';
 import crypto from 'crypto';
 import db from './database.js';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;

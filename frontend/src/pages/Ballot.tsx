@@ -8,7 +8,6 @@ import {
   Card,
   CardContent,
   Checkbox,
-  FormControlLabel,
   Chip,
   Alert,
   Drawer,
@@ -24,12 +23,17 @@ import {
   HowToVote as VoteIcon,
 } from "@mui/icons-material";
 import { peopleAPI, ballotAPI } from "../utils/api";
+import type { User, Person, Nomination, BallotSelection } from "../types";
 
-function Ballot({ user }) {
-  const [people, setPeople] = useState([]);
-  const [selectedPeople, setSelectedPeople] = useState(new Set());
-  const [viewingPerson, setViewingPerson] = useState(null);
-  const [nominations, setNominations] = useState([]);
+interface BallotProps {
+  user: User;
+}
+
+function Ballot({ user }: BallotProps) {
+  const [people, setPeople] = useState<Person[]>([]);
+  const [selectedPeople, setSelectedPeople] = useState<Set<string>>(new Set());
+  const [viewingPerson, setViewingPerson] = useState<Person | null>(null);
+  const [nominations, setNominations] = useState<Nomination[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -51,9 +55,7 @@ function Ballot({ user }) {
 
       setPeople(peopleData);
 
-      const selected = new Set(
-        selectionsData.map((s) => `${s.person_name}|${s.person_year}`)
-      );
+      const selected = new Set(selectionsData.map((s) => `${s.person_name}|${s.person_year}`));
       setSelectedPeople(selected);
     } catch (err) {
       setError("Failed to load ballot data");
@@ -63,7 +65,7 @@ function Ballot({ user }) {
     }
   };
 
-  const handleToggleSelection = (person) => {
+  const handleToggleSelection = (person: Person) => {
     const key = `${person.name}|${person.year}`;
     const newSelected = new Set(selectedPeople);
 
@@ -82,7 +84,7 @@ function Ballot({ user }) {
     setSuccess("");
   };
 
-  const handleViewNominations = async (person) => {
+  const handleViewNominations = async (person: Person) => {
     setLoadingNominations(true);
     setViewingPerson(person);
     try {
@@ -107,23 +109,22 @@ function Ballot({ user }) {
     setSuccess("");
 
     try {
-      const selections = Array.from(selectedPeople).map((key) => {
+      const selections: BallotSelection[] = Array.from(selectedPeople).map((key) => {
         const [person_name, person_year] = key.split("|");
         return { person_name, person_year };
       });
 
       await ballotAPI.saveSelections(selections);
-      setSuccess(
-        `Ballot saved! You selected ${selections.length} of ${MAX_SELECTIONS} people.`
-      );
+      setSuccess(`Ballot saved! You selected ${selections.length} of ${MAX_SELECTIONS} people.`);
     } catch (err) {
-      setError(err.message || "Failed to save ballot");
+      const message = err instanceof Error ? err.message : "Failed to save ballot";
+      setError(message);
     } finally {
       setSaving(false);
     }
   };
 
-  const isSelected = (person) => {
+  const isSelected = (person: Person): boolean => {
     return selectedPeople.has(`${person.name}|${person.year}`);
   };
 
@@ -156,21 +157,12 @@ function Ballot({ user }) {
           }}
         >
           <Box>
-            <Typography
-              variant="h3"
-              component="h1"
-              gutterBottom
-              fontWeight="bold"
-            >
+            <Typography variant="h3" component="h1" gutterBottom fontWeight="bold">
               Your Ballot
             </Typography>
-            <Typography
-              variant="body1"
-              color="text.secondary"
-              sx={{ maxWidth: 600 }}
-            >
-              Select up to {MAX_SELECTIONS} people to induct into the Hall of
-              Fame. You can read their nominations before deciding.
+            <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 600 }}>
+              Select up to {MAX_SELECTIONS} people to induct into the Hall of Fame. You can read
+              their nominations before deciding.
             </Typography>
           </Box>
 
@@ -213,13 +205,7 @@ function Ballot({ user }) {
         <Button
           variant="contained"
           size="large"
-          startIcon={
-            saving ? (
-              <CircularProgress size={20} color="inherit" />
-            ) : (
-              <VoteIcon />
-            )
-          }
+          startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <VoteIcon />}
           onClick={handleSubmitBallot}
           disabled={saving || selectedPeople.size === 0}
         >
@@ -233,9 +219,8 @@ function Ballot({ user }) {
           const selected = isSelected(person);
 
           return (
-            <Grid size={4} item>
+            <Grid item xs={12} sm={6} md={4} key={`${person.name}|${person.year}`}>
               <Card
-                key={`${person.name}|${person.year}`}
                 variant="outlined"
                 sx={{
                   border: selected ? 2 : 1,
@@ -303,10 +288,7 @@ function Ballot({ user }) {
                     </Box>
 
                     {/* View Button */}
-                    <Button
-                      variant="outlined"
-                      onClick={() => handleViewNominations(person)}
-                    >
+                    <Button variant="outlined" onClick={() => handleViewNominations(person)}>
                       View Nomination{person.nomination_count > 1 ? "s" : ""}
                     </Button>
                   </Box>
@@ -327,9 +309,7 @@ function Ballot({ user }) {
         }}
       >
         {viewingPerson && (
-          <Box
-            sx={{ height: "100%", display: "flex", flexDirection: "column" }}
-          >
+          <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
             {/* Drawer Header */}
             <Box sx={{ p: 3, borderBottom: 1, borderColor: "divider" }}>
               <Box
@@ -343,13 +323,8 @@ function Ballot({ user }) {
                   <Typography variant="h5" fontWeight="bold">
                     {viewingPerson.name}
                   </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 0.5 }}
-                  >
-                    Class of {viewingPerson.year} •{" "}
-                    {viewingPerson.nomination_count} nomination
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Class of {viewingPerson.year} • {viewingPerson.nomination_count} nomination
                     {viewingPerson.nomination_count > 1 ? "s" : ""}
                   </Typography>
                 </Box>
@@ -368,22 +343,14 @@ function Ballot({ user }) {
               ) : (
                 <Stack spacing={3}>
                   {nominations.map((nom, index) => (
-                    <Paper
-                      key={nom.id}
-                      elevation={2}
-                      sx={{ p: 3, bgcolor: "grey.50" }}
-                    >
+                    <Paper key={nom.id} elevation={2} sx={{ p: 3, bgcolor: "grey.50" }}>
                       <Typography variant="h6" color="primary" gutterBottom>
                         Nomination {index + 1}
                       </Typography>
 
                       {nom.nomination_summary && (
                         <Box sx={{ mb: 2 }}>
-                          <Typography
-                            variant="subtitle2"
-                            fontWeight="bold"
-                            gutterBottom
-                          >
+                          <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                             Summary
                           </Typography>
                           <Typography variant="body2" paragraph>
@@ -394,11 +361,7 @@ function Ballot({ user }) {
 
                       {nom.career_position && (
                         <Box sx={{ mb: 2 }}>
-                          <Typography
-                            variant="subtitle2"
-                            fontWeight="bold"
-                            gutterBottom
-                          >
+                          <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                             Career / Position
                           </Typography>
                           <Typography variant="body2" paragraph>
@@ -413,11 +376,7 @@ function Ballot({ user }) {
                         nom.educational_achievements ||
                         nom.merit_awards) && (
                         <Box sx={{ mb: 2 }}>
-                          <Typography
-                            variant="subtitle2"
-                            fontWeight="bold"
-                            gutterBottom
-                          >
+                          <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                             Achievements
                           </Typography>
 
@@ -486,11 +445,7 @@ function Ballot({ user }) {
                       {/* Service Section */}
                       {(nom.service_church_community || nom.service_mbaphs) && (
                         <Box sx={{ mb: 2 }}>
-                          <Typography
-                            variant="subtitle2"
-                            fontWeight="bold"
-                            gutterBottom
-                          >
+                          <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
                             Service
                           </Typography>
 
@@ -536,11 +491,7 @@ function Ballot({ user }) {
                             borderColor: "divider",
                           }}
                         >
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            display="block"
-                          >
+                          <Typography variant="caption" color="text.secondary" display="block">
                             Nominated by: {nom.nominator_name}
                             {nom.nominator_email && ` • ${nom.nominator_email}`}
                             {nom.nominator_phone && ` • ${nom.nominator_phone}`}
@@ -548,9 +499,7 @@ function Ballot({ user }) {
                         </Box>
                       )}
 
-                      {index < nominations.length - 1 && (
-                        <Divider sx={{ mt: 2 }} />
-                      )}
+                      {index < nominations.length - 1 && <Divider sx={{ mt: 2 }} />}
                     </Paper>
                   ))}
                 </Stack>

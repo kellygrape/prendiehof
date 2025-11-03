@@ -185,7 +185,9 @@
   padding: 1.5rem;
   border-radius: 0.75rem;
   box-shadow: var(--shadow);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 }
 
 .nomination-card:hover {

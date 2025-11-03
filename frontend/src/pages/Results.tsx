@@ -1,43 +1,48 @@
-import { useState, useEffect } from 'react'
-import { resultsAPI } from '../utils/api'
+import { useState, useEffect } from "react";
+import { resultsAPI } from "../utils/api";
+import type { User, ResultPerson } from "../types";
 
-function Results({ user }) {
-  const [results, setResults] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [sortBy, setSortBy] = useState('selections') // selections, name
+interface ResultsProps {
+  user: User;
+}
+
+function Results({ user }: ResultsProps) {
+  const [results, setResults] = useState<ResultPerson[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sortBy, setSortBy] = useState<"selections" | "name">("selections");
 
   useEffect(() => {
-    loadResults()
-  }, [])
+    loadResults();
+  }, []);
 
   const loadResults = async () => {
     try {
-      const data = await resultsAPI.get()
-      setResults(data)
+      const data = await resultsAPI.get();
+      setResults(data);
     } catch (err) {
-      console.error('Failed to load results:', err)
+      console.error("Failed to load results:", err);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const sortedResults = [...results].sort((a, b) => {
-    if (sortBy === 'selections') {
+    if (sortBy === "selections") {
       // Sort by selection count descending
-      return b.selection_count - a.selection_count
+      return b.selection_count - a.selection_count;
     } else {
       // Sort by name alphabetically
-      return a.name.localeCompare(b.name)
+      return a.name.localeCompare(b.name);
     }
-  })
+  });
 
-  const getPercentage = (count, total) => {
-    if (total === 0) return 0
-    return Math.round((count / total) * 100)
-  }
+  const getPercentage = (count: number, total: number): number => {
+    if (total === 0) return 0;
+    return Math.round((count / total) * 100);
+  };
 
   if (loading) {
-    return <div className="loading">Loading results...</div>
+    return <div className="loading">Loading results...</div>;
   }
 
   return (
@@ -46,7 +51,10 @@ function Results({ user }) {
         <h1>Voting Results</h1>
         <div className="sort-controls">
           <label>Sort by:</label>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as "selections" | "name")}
+          >
             <option value="selections">Most Selections</option>
             <option value="name">Name (A-Z)</option>
           </select>
@@ -60,19 +68,19 @@ function Results({ user }) {
       ) : (
         <div className="results-list">
           {sortedResults.map((result, index) => {
-            const selectionPercent = getPercentage(result.selection_count, result.total_committee_members)
-            const isTopEight = index < 8
+            const selectionPercent = getPercentage(result.selection_count, result.total_committee);
+            const isTopEight = index < 8;
 
             return (
-              <div key={`${result.name}|${result.year}`} className={`result-card ${isTopEight ? 'top-eight' : ''}`}>
+              <div
+                key={`${result.name}|${result.year}`}
+                className={`result-card ${isTopEight ? "top-eight" : ""}`}
+              >
                 <div className="result-header">
-                  <div className={`result-rank ${isTopEight ? 'top-rank' : ''}`}>{index + 1}</div>
+                  <div className={`result-rank ${isTopEight ? "top-rank" : ""}`}>{index + 1}</div>
                   <div className="result-info">
                     <h3>{result.name}</h3>
                     <p className="person-year">Class of {result.year}</p>
-                    {result.nomination_count > 1 && (
-                      <p className="nomination-count">{result.nomination_count} nominations</p>
-                    )}
                   </div>
                 </div>
 
@@ -80,7 +88,8 @@ function Results({ user }) {
                   <div className="stat-row">
                     <span className="stat-label">Committee Selections:</span>
                     <span className="stat-value">
-                      {result.selection_count} of {result.total_committee_members} members ({selectionPercent}%)
+                      {result.selection_count} of {result.total_committee} members (
+                      {selectionPercent}%)
                     </span>
                   </div>
                 </div>
@@ -93,20 +102,19 @@ function Results({ user }) {
                     ></div>
                   </div>
                   <div className="selection-count-large">
-                    {result.selection_count} {result.selection_count === 1 ? 'selection' : 'selections'}
+                    {result.selection_count}{" "}
+                    {result.selection_count === 1 ? "selection" : "selections"}
                   </div>
                 </div>
 
-                {isTopEight && (
-                  <div className="top-eight-badge">Top 8</div>
-                )}
+                {isTopEight && <div className="top-eight-badge">Top 8</div>}
               </div>
-            )
+            );
           })}
         </div>
       )}
     </div>
-  )
+  );
 }
 
-export default Results
+export default Results;
