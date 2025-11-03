@@ -66,6 +66,7 @@ export interface ResultPerson {
   selection_count: number;
   total_committee: number;
   percentage: number;
+  voters: Array<{ id: number; username: string }>;
 }
 
 // Stats types

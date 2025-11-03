@@ -215,9 +215,16 @@ app.get('/api/results', authenticateToken, async (req, res) => {
       SELECT n.name, n.year,
              COUNT(DISTINCT n.id) as nomination_count,
              COUNT(DISTINCT bs.id) as selection_count,
-             (SELECT COUNT(*) FROM users WHERE role = 'committee') as total_committee_members
+             (SELECT COUNT(*) FROM users WHERE role = 'committee') as total_committee_members,
+             COALESCE(
+               json_agg(
+                 DISTINCT jsonb_build_object('id', u.id, 'username', u.username)
+               ) FILTER (WHERE u.id IS NOT NULL),
+               '[]'
+             ) as voters
       FROM nominations n
       LEFT JOIN ballot_selections bs ON n.name = bs.person_name AND n.year::text = bs.person_year
+      LEFT JOIN users u ON bs.user_id = u.id
       GROUP BY n.name, n.year
       ORDER BY selection_count DESC, n.name
     `);

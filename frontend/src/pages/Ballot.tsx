@@ -23,13 +23,9 @@ import {
   HowToVote as VoteIcon,
 } from "@mui/icons-material";
 import { peopleAPI, ballotAPI } from "../utils/api";
-import type { User, Person, Nomination, BallotSelection } from "../types";
+import type { Person, Nomination, BallotSelection } from "../types";
 
-interface BallotProps {
-  user: User;
-}
-
-function Ballot({ user }: BallotProps) {
+function Ballot() {
   const [people, setPeople] = useState<Person[]>([]);
   const [selectedPeople, setSelectedPeople] = useState<Set<string>>(new Set());
   const [viewingPerson, setViewingPerson] = useState<Person | null>(null);
@@ -219,7 +215,7 @@ function Ballot({ user }: BallotProps) {
           const selected = isSelected(person);
 
           return (
-            <Grid item xs={12} sm={6} md={4} key={`${person.name}|${person.year}`}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={`${person.name}|${person.year}`}>
               <Card
                 variant="outlined"
                 sx={{

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Chip, Stack } from "@mui/material";
 import { resultsAPI } from "../utils/api";
 import type { User, ResultPerson } from "../types";
 
@@ -84,15 +85,21 @@ function Results({ user }: ResultsProps) {
                   </div>
                 </div>
 
-                <div className="result-stats">
-                  <div className="stat-row">
-                    <span className="stat-label">Committee Selections:</span>
-                    <span className="stat-value">
-                      {result.selection_count} of {result.total_committee} members (
-                      {selectionPercent}%)
-                    </span>
+                {result.voters && result.voters.length > 0 && (
+                  <div style={{ marginTop: "1rem" }}>
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                      {result.voters.map((voter) => (
+                        <Chip
+                          key={voter.id}
+                          label={voter.username}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                        />
+                      ))}
+                    </Stack>
                   </div>
-                </div>
+                )}
 
                 <div className="selection-bar-container">
                   <div className="selection-bar">
